@@ -1,0 +1,20 @@
+@Font:	Win95::-13:0
+@UTF8
+@Begin
+@Languages:	eng
+@Participants:	CHI Target_Child, FA1 Mother, FA2 Woman, FA3 Woman, FA4 Woman, MA1 Man, MA2 Man, MA3 Man, EE1 Adult, FC1 Child, FC2 Child, FC3 Child, MC1 Child
+@ID:	test||CHI|||||Target_Child|||
+@ID:	test||CHI|||||Mother|||
+@ID:	test||FA1|||||Woman|||
+@ID:	test||FA2|||||Woman|||
+@ID:	test||FA3|||||Woman|||
+@ID:	test||FA4|||||Woman|||
+@ID:	test||MA1|||||Man|||
+@ID:	test||MA2|||||Man|||
+@ID:	test||MA3|||||Man|||
+@ID:	test||MA4|||||Man|||
+@ID:	test||EE1|||||Adult|||
+@ID:	test||FC1|||||Child|||
+@ID:	test||FC2|||||Child|||
+@ID:	test||FC3|||||Child|||
+@ID:	test||MC1|||||Child|||

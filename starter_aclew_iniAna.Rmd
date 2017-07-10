@@ -1,0 +1,61 @@
+---
+title: "aclew starter clean up and ini ana"
+author: "Alejandrina Cristia"
+date: "7/6/2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+
+```{r cars}
+
+summary(allData)
+allData %>% 
+  #filter(!is.na(`vcm@CHI`)) %>% 
+  group_by( age,corpus, aclewid, `vcm@CHI`) %>% 
+  summarise(sumdur = sum(`Duration - ss.msec`)) %>% 
+  spread(`vcm@CHI`,value = sumdur)
+
+#vcm
+ggplot(filter(allData, !is.na(`vcm@CHI`)), 
+#ggplot(allData, 
+       aes(reorder(aclewid,as.numeric(age)), `Duration - ss.msec`, fill = `vcm@CHI`,
+           label = age))+
+  stat_summary(fun.y=sum, geom = "bar", position= "stack")+
+  stat_summary(aes(label=age, color = corpus, group = 1), fun.y=sum, geom="text", size=4,
+               vjust = -0.5)
+#lex
+ggplot(filter(allData, !is.na(`lex@CHI`)),
+#ggplot(allData, 
+       aes(reorder(aclewid,as.numeric(age)), `Duration - ss.msec`, fill = `lex@CHI`,
+           label = age))+
+  stat_summary(fun.y=sum, geom = "bar", position= "stack")+
+  stat_summary(aes(label=age, color = corpus, group = 1), fun.y=sum, geom="text", size=4,
+               vjust = -0.5)
+
+#mwu
+ggplot(filter(allData, !is.na(`mwu@CHI`)),
+#ggplot(allData, 
+       aes(reorder(aclewid,as.numeric(age)), `Duration - ss.msec`, fill = `mwu@CHI`,
+           label = age))+
+  stat_summary(fun.y=sum, geom = "bar", position= "stack")+
+  stat_summary(aes(label=age, color = corpus, group = 1), fun.y=sum, geom="text", size=4,
+               vjust = -0.5)
+
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r pressure, echo=FALSE}
+plot(pressure)
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

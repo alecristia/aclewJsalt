@@ -1,0 +1,81 @@
+#Very first step is in ELAN: Do File/Export multiple files as.../ (only need to do this once: New domain / add folder / aclew starter / choose ) / OK & select all columns then set variables as per eaf2tsvWideSettings.tiff and repeat without "separate column" ticked for the Long version
+
+grep -v "^[a-z]" < ~/Dropbox/aclew/starter_aclew_r/data/allData_long.txt   > ~/Dropbox/aclew/starter_aclew_r/data/allLexData.txt
+
+
+      #convert all weird codes
+tr "\t" "€" < ~/Dropbox/aclew/starter_aclew_r/data/allLexData.txt |
+   sed  's/^CHI2€/FC3€/g'  | tr '€' '\t' > ~/Dropbox/aclew/starter_aclew_r/data/tmp.txt
+
+
+cat ~/Dropbox/aclew/starter_aclew_r/data/tmp.txt | awk '{FS="\t"; print $7 "\t" "*"$1":" "\t" $6}' > ~/Dropbox/aclew/starter_aclew_r/data/allLexDataOrdered.txt
+
+nlines=`wc -l ~/Dropbox/aclew/starter_aclew_r/data/tmp.txt | awk '{print $1}'` 
+prefix="*"
+postfix=":\t"
+lastFile=""
+fileEnd="@End"
+for thisline in `seq 1 $nlines`
+   do
+     line=`sed "${thisline}q;d" < ~/Dropbox/aclew/starter_aclew_r/data/allLexDataOrdered.txt`
+      file=`echo $line | sed "s/\.eaf.*//"`
+       content=`echo $line | sed "s/^.*\.eaf//"`
+
+    if [ "$file" != "$lastFile" ]
+	then
+	#then we create the file by copying the header
+	cp ~/Dropbox/aclew/starter_aclew_r/scripts/chaheader.txt ~/Dropbox/aclew/starter_aclew_r/data/fake_cha/${file}.txt
+	echo $fileEnd >> ~/Dropbox/aclew/starter_aclew_r/data/fake_cha/${lastFile}.txt
+
+	lastFile=$file
+      fi
+
+ #next send in the line
+	
+	echo $content >> ~/Dropbox/aclew/starter_aclew_r/data/fake_cha/${file}.txt
+
+ 
+done
+
+
+# cleaning of the lexicon
+grep -v "^[a-z]" < ~/Dropbox/aclew/starter_aclew_r/data/allData_long.txt |  awk '{FS="\t"; print $7 "\t" $3 "\t" $4 "\t" $6 }' |
+tr -d '\"' |
+tr -d '\^' | #used to be identical to previous line
+tr -d '\/' |
+sed 's/\+/ /g' |
+tr -d '\<' |
+tr -d '\>' |
+sed 's/&=[^ ]*//g' | 
+# sed 's/&[^ ]*//g' |  #delete words beginning with & ##IMPORTANT CHOICE COULD HAVE CHOSEN TO NOT DELETE SUCH NEOLOGISMS/NONWORDS
+sed 's/\[[^[]*\]//g' | #delete comments
+#sed 's/([^(]*)//g' | #IMPORTANT CHOICE -- UNCOMMENT THIS LINE AND COMMENT OUT THE NEXT TO DELETE MATERIAL NOTED AS NOT PRONOUNCED
+sed 's/(//g' | sed 's/)//g' | #IMPORTANT CHOICE -- UNCOMMENT THIS LINE AND COMMENT OUT THE PRECEDING TO REMOVE PARENTHESES TAGGING UNPRONOUNCED MATERIAL
+sed 's/xxx//g' |
+sed 's/www//g' |
+sed 's/XXX//g' |
+sed 's/yyy//g' |
+sed 's/zzz//g' |
+sed 's/x x x x x x x x x x x x//g' |
+sed 's/x x x x x x x x x x x x x x x x x x x//g' |
+#sed 's/[^ ]*@s:[^ ]*//g' | #delete words tagged as being a switch into another language
+#sed 's/[^ ]*@o//g' | #delete words tagged as onomatopeic
+#sed 's/@[^ ]*//g' | #delete tags beginning with @ IMPORTANT CHOICE, COULD HAVE CHOSEN TO DELETE FAMILIAR/ONOMAT WORDS
+sed "s/\' / /g"  |
+tr -s ' ' |
+sed 's/ $//g' |
+sed 's/^ //g' |
+sed 's/^[ ]*//g' |
+sed 's/ $//g' |
+awk '{gsub("\"",""); print}' > ~/Dropbox/aclew/starter_aclew_r/data/cleanContents.txt
+
+
+
+	
+#### Next section is in CLAN
+# set working directory and output directory to ~/Dropbox/aclew/starter_aclew_r/data/ 
+# get summary of quantities collapsing over 5 minutes within each file
+#  mlt +f"summary" +d0 *.txt
+
+# get mattr
+#  freq  +b10 +d3 +f“mattr” *.txt
