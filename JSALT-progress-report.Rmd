@@ -1,0 +1,286 @@
+---
+title: "jsalt notes lena comparison & beyond"
+author: "Alejandrina Cristia, alecristia@gmail.com"
+date: "8/10/2017"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = F)
+```
+
+## Introduction
+
+This is a progress report from the JSALT workshop.
+
+At present, we have output from two "speech activity detectors" or SADs, the LENA one and the LDC one with no tweaks; and this from maximally 4 datasets:
+
+- aclewstarter: 1.5h extracted in 5 minute chunks from "high volubility sections" from corpora in aclew, including seedlings, soderstrom, casillas -- so partial overlap with seedlings, casj and sod2 mentioned below. Mixture of recordings. All coded by experts.
+- sod2: .75h extracted in 5 minute chunks **CHECK MODE OF EXTRACTION** from the Soderstrom corpus in ACLEW. Urban setting, expert coding.
+- casj: 7.5h extracted randomly (5 minute chunks), all with olympus recorder. Coded by expert.
+- seedlings: 2.5h extracted in 5 minute chunks from "high volubility sections" from the seedlings dataset, annotated by LDC personnel (semi-pro).
+- namvanj: about 20h extracted randomly (1 minute every hour) from the Namibia and Vanuatu datasets, annotated by expert. There were 3 devices: Olympus and LENA were used for a minority of recordings; USB for about half.
+
+
+Please note that all performance reported here relates ONLY to the detection of speech (compared to non-speech). It does NOT reflect diarization (the attribution of a speech segment to one or another speaker).
+
+```{r readin, eval=F}
+jf="/Users/acristia/Documents/JSALT"
+sums=list.dirs(path=jf,recursive=F)
+ds=NULL
+for(i in sums) if(i !=paste0(jf,"/tools")) ds=rbind(ds,cbind(read.table(paste0(i,"/summary_clean.text")),i))
+summary(ds)
+ds$i=gsub(paste0(jf,"/"),"",ds$i)
+
+names(ds)<-c("file","method","DER","b3f1","corpus")
+ds$corpus=factor(ds$corpus)
+write.table(ds,"/Users/acristia/Documents/dalohumacosp/derivedFiles/ds_jsalt.txt",row.names=F,sep="\t")
+
+```
+
+
+I should check which files go awry, why, and fix that. A bunch of NAs also in Casillas (probably change in version not reflected here, I should check that I'm using the latest files). Loads of NaNs in namvanj (not sure why...) In any case, datasets will grow soon.
+
+```{r readin-final}
+read.table("../derivedFiles/ds_jsalt.txt",header=T)->ds
+ds$corpus=factor(ds$corpus, levels=c('aclewstarter',"sod2","seedlings","namvanj","casj"))
+ds[ds$method %in% c("ldc","lena","lena_nofar"),]-> sad
+sad$method=factor(sad$method)
+
+haslena=subset(sad,method=="lena")
+haslena=merge(haslena,sad[sad$method!="lena" & sad$method!="lena_nofar",],all.y=F,by="file")
+names(haslena)<-gsub(".x","_l",names(haslena))
+names(haslena)<-gsub(".y","_ldc",names(haslena))
+nofar=sad[sad$method=="lena_nofar",]
+names(nofar)[2:length(names(nofar))]<-paste0(names(nofar)[2:length(names(nofar))],"_lnf")
+haslena=merge(haslena,nofar,all.y=F,by="file")
+haslena$file=factor(haslena$file)
+#table(haslena$corpus.x)
+
+ds$lenacomp= ds$file %in% levels(haslena$file)
+sad$lenacomp= sad$file %in% levels(haslena$file)
+
+```
+
+
+## Comparisons with LENA
+
+In this section we focus on `r dim(haslena)[1]` files that have both LDC and LENA parses. There are two evaluations for LENA, one in which all FAx, MAx, Cxx are considered speech ("lena" below); and another in which only FAN MAN and CxN are considered speech (i.e., "lnf" or "lena no far" below).
+
+### Differences in performance 
+
+Does one system perform better than the other? The following is a density plot, which is a smoothed histogram where the "mass" of the observations has been standardized. By and large, the more mass is to the right, the better the performance is. (Because 0 is terrible, and 1 is perfect segmentation performance.) Performance is b-cubed F1 (which is emerging as the "best" measure here at the workshop); and it's always calculated against the human gold.
+
+```{r comp-f1, echo=T}
+library(sm)
+library(viridis)
+
+mycols=viridis(length(levels(sad$method)))
+sm.density.compare(sad$b3f1[sad$lenacomp], sad$method[sad$lenacomp], xlab="B-cubed F1",col=mycols)
+for(i in 1:length(levels(sad$method)))  text(max(sad$b3f1[sad$lenacomp]),i,levels(sad$method)[i],col=mycols[i])
+
+plot(sad$b3f1[sad$lenacomp] ~ jitter(as.numeric(as.factor(sad$method[sad$lenacomp])),factor=1.3),pch=20,xaxt="n",ylab="b^3 F1",xlim=c(0.5,3.5),xlab="",cex=.5)
+axis(1,at=1:length(levels(as.factor(sad$method))),labels=levels(as.factor(sad$method)),las=2)
+
+
+t.test(haslena$b3f1_l,haslena$b3f1_ldc,paired=T)->l_ldc
+t.test(haslena$b3f1_lnf,haslena$b3f1_ldc,paired=T)->lnf_ldc
+
+```
+
+There is a slight trend for better performance in LENA than LDC: the difference in b-cubed F1 scores is `r round(l_ldc$estimate,2)`, from a paired t-test p=`r round(l_ldc$p.value,3)`. If we exclude "far" segments, the picture change only slightly: the difference in b-cubed F1 scores is `r round(lnf_ldc$estimate,2)`, from a paired t-test p=`r round(lnf_ldc$p.value,3)`.  This is not too bad considering it  takes zero tweaking to run this segmentor!
+
+### Similarities in performance 
+
+Do both  perform poorly with certain kinds of files? 
+
+```{r covar, echo=T}
+library(lattice)
+splom(haslena[,c("b3f1_l","b3f1_lnf","b3f1_ldc")],varnames=c("LENA","LENA\n(no far)", "LDC"))
+mylims=range(haslena$b3f1_ldc,haslena$b3f1_lnf)
+pdf("comparison_lena_ldc_sad.pdf",height=10,width=10,pointsize=20)
+plot(haslena$b3f1_ldc ~ haslena$b3f1_lnf,xlab="LENA SAD B^3 F1",ylab="LDC SAD B^3 F1",pch=20,ylim=mylims,xlim=mylims,cex.lab=1.5,cex.axis=1.5)
+lines(c(0,1),c(0,1),lty=2)
+dev.off()
+```
+
+Files that get low performance by LENA (with or without far) are also those that get low performance by LDC. There may be a slight trend for LENA to outperform LDC in "easy" files.
+
+## Comparisons across corpora
+
+In what follows, we forget about the LENA versus LDC question, and we'll just focus on performance against the human annotators only using the LDC SAD. This means we can now use information of all `r dim(ds[ds$method=="ldc",])[1]` files that have been analyzed with LDC.
+
+Next we plot performance as a function of corpus; as before, the more mass is to the right, the better the performance is (0 is terrible, 1 is perfect). Remember that the mass is standardized, so that corpora with more datapoints have the same surface as smaller corpora.
+
+```{r comp-cor, echo=T}
+mycols=viridis(length(levels(ds$corpus)))
+sm.density.compare(ds$b3f1[ds$method=="ldc"], ds$corpus[ds$method=="ldc"], xlab="B-cubed F1",col=mycols)
+for(i in 1:length(levels(ds$corpus)))  text(1,i,levels(ds$corpus)[i],col=mycols[i])
+```
+
+The fact that seedlings scores lowest & aclewstarter highest leads to a couple of conclusions:
+
+- recording equipment doesn't matter all that much: seedlings is 100% LENA; aclew 60%; casj 0%. Clearly, the order of difficulty is not correlated with performance
+
+- there may have been an effect of selection biases, but not in obvious ways: seedlings and aclewstart were both selected for high volubility, yet they are at the ends of the distribution.
+
+- it is not the case that the rural recordings are particularly difficult or easy; they are in between 2 corpora that have a high loading of urban population (seedlings, aclewstarter).
+
+Here is another way of showing the same things:
+
+```{r comp2, echo=T}
+pdf("performance_sad_corpora.pdf",height=10,width=10,pointsize=20)
+subset(ds,method=="ldc")->ldc_only
+ncor=length(levels(as.factor(ldc_only$corpus)))
+
+ldc_only$corpus=factor(ldc_only$corpus, levels=c('aclewstarter',"sod2","seedlings","namvanj","casj"))
+plot(ldc_only$b3f1~ jitter(as.numeric(as.factor(ldc_only$corpus)),factor=1.3),pch=20,xaxt="n",ylab="b^3 F1",xlim=c(.5,5.5),xlab="",cex=.5,main="LDC SAD performance")
+axis(1, at=1:ncor, labels=c("ldc_onlyEW","Sod2","SeedLings","Nam+Van","Casillas"), las=2)
+
+points( aggregate(ldc_only$b3f1, by=list(ldc_only$corpus), mean)$x ~ c(1:ncor), pch=8, col="red",cex=5)
+dev.off()
+
+```
+
+### Zooming on the ACLEW starter dataset
+
+This subset has been extracted and annotated following a standardized routine.
+
+```{r comp-acl, echo=T}
+subset(ds,corpus=="aclewstarter" & method=="ldc")->acl
+acl$subc=substr(acl$file,1,3)
+plot(acl$b3f1~ jitter(as.numeric(as.factor(acl$subc)),factor=.1),pch=20,xaxt="n",ylab="b^3 F1",xlim=c(0,7),xlab="")
+axis(1,at=1:length(levels(as.factor(acl$subc))),labels=levels(as.factor(acl$subc)),las=2)
+```
+
+Once again, it doesn't seem like performance responds to having been recorded with lena (ber, row, sod, war) or not (cas, ros). Now we can also say performance probably doesn't relate to child age: WAR's kids are much younger than the rest, yet these points are well-aligned with the others.
+
+## Initial diarization results
+
+The diarization part of the problem is, given a set of sections that have been labeled as being speech, who spoke them? The following results assume the human segmentation of speech versus non-speech, so they are unrealistically high. (That is, we can probably expect lower performance when starting from scratch with an automatic speech activity detection, as errors will accumulate.) We used two systems, which for simplicity I'll name as diarTK and JHU i-vector (this is not sufficient information to identify them outside of the contect of JSALT). These two systems were applied only on the Cas-J dataset, separately for each channel. Here I'm showing one of the channels (1/A) just to simplify matters.
+
+```{r readin2, eval=F}
+xx=read.table("/Users/acristia/Documents/JSALT/casj/summary_clean.text")
+xx[grep("diar",xx$V2),]-> diar
+names(diar)<-c("file","method","DER","b3f1")
+write.table(diar,"../dalohumacosp/derivedFiles/casj_diar.txt",row.names=F,sep="\t")
+
+```
+
+
+
+
+```{r diar-perf}
+read.table("../derivedFiles/casj_diar.txt",header=T)->diar
+
+#pdf("performance_diar.pdf",height=7,width=5,pointsize=20)
+subset(diar,method=="goldsad_diar_a" | method=="goldsad_diarTK_a")->diar
+diar$method=factor(diar$method)
+plot(diar$b3f1~ jitter(as.numeric(as.factor(diar$method))),pch=20,xaxt="n",ylab="b^3 F1",xlab="",cex=.5, main="Gold SAD Diarzt.")
+axis(1,at=1:length(levels(as.factor(diar$method))),labels=c("DiarTK","JHU i-vctr"),las=2)
+points(aggregate(diar$b3f1,by=list(diar$method),mean)$x ~ c(1:2), pch=8,col="red",cex=5)
+#dev.off()
+
+
+#pdf("performance_diar_diarTKJHU.pdf",height=5,width=5,pointsize=20)
+plot(diar$b3f1[diar$method=="goldsad_diarTK_a"] ~ diar$b3f1[diar$method=="goldsad_diar_a"],pch=20,xlab="diarTK b^3 F1",ylab="JHU b^3 F1")
+lines(c(0,1),c(0,1),lty=2)
+#dev.off()
+
+summary(diar)
+
+aggregate(diar$b3f1,by=list(diar$method),mean)
+```
+These two plots show that the two algorithms we used so far perform pretty similarly. The performance at about `r mean(diar$b3f1)` b-cubed F-score (same type of measure as before) is not great, but it's very good given that these systems have not been retrained to Tzeltal, and have zero experience with children's speech. At the local's recommendation, I also calculated diarization error rate, where higher is worse. DER is about 15% in state of the art performance in well-behaved speaker settings, such as TV shows where talker change is pretty much set.
+
+```{r diar-der}
+#pdf("performance_diar_DER.pdf",height=7,width=5,pointsize=20)
+subset(diar,method=="goldsad_diar_a" | method=="goldsad_diarTK_a")->diar
+diar$method=factor(diar$method)
+plot(diar$DER~ jitter(as.numeric(as.factor(diar$method))),pch=20,xaxt="n",ylab="DER",xlab="",cex=.5, main="Gold SAD Diarzt.")
+axis(1,at=1:length(levels(as.factor(diar$method))),labels=c("DiarTK","JHU i-vctr"),las=2)
+points(aggregate(diar$DER,by=list(diar$method),mean)$x ~ c(1:2), pch=8,col="red",cex=5)
+#dev.off()
+
+aggregate(diar$DER,by=list(diar$method),mean)
+
+```
+
+As suspected, DER is super high here, and the JHU i-vector system works better than diartk, which fits in well with other results.
+
+```{r create-n-talkers, eval=F}
+diarf=dir(path="/Users/acristia/Documents/JSALT/casj/",pattern="diar")
+ntall=NULL
+for(thisdir in diarf){
+  rttms=dir(path=paste0("/Users/acristia/Documents/JSALT/casj/",thisdir),pattern=".rttm")
+  for(thisfile in rttms){
+    read.table(paste0("/Users/acristia/Documents/JSALT/casj/",thisdir,"/",thisfile))->x
+    talkers=levels(x$V8)
+    length(talkers)->ntalkers
+    length(talkers[grep("C",talkers)])->nchildren
+    ntall=rbind(ntall,cbind(thisdir,thisfile,ntalkers,nchildren,ntalkers-nchildren))
+  }
+}
+
+
+write.table(ntall,"../derivedFiles/casj_ntalkers.txt",row.names=F,quote=T,sep="\t")
+
+# I want to know:
+# precision for each speaker
+# confusion for speaker types 
+# accuracy by segment length?
+
+```
+
+The following graphs plot recovered number of speaker as a function of real number of speakers, both jittered for inspection. First with all talkers, then only adult talkers in the human coding.
+
+```{r diar-comp-reality}
+read.table("/Users/acristia/Documents/dalohumacosp/derivedFiles/casj_ntalkers.txt",header=T)->ntall
+names(ntall)<-c("method","file","ntalkers","nchildren","nads")
+
+#pdf("nt.pdf")
+systems=levels(as.factor(ntall$method))
+systems[!(systems %in% "human_diar")]->systems
+systems[grep("_A",systems)]->systems
+
+for(thissys in systems) {
+  print(thissys)
+  plot(jitter(ntall$ntalkers[ntall$method==thissys],factor=1) ~jitter(ntall$ntalkers [ntall$method=="human_diar"],factor=1),pch=20,xlim=c(0,10),ylim=c(0,10),xlab="Human",ylab=thissys,main="All talkers")
+  #print(ntall$ntalkers[ntall$method==thissys])
+  #print(ntall$ntalkers [ntall$method=="human_diar"])
+  print(cor.test(ntall$ntalkers[ntall$method==thissys], ntall$ntalkers [ntall$method=="human_diar"],paired=T,method="spearman"))
+  }
+
+for(thissys in systems){ 
+  print(thissys)
+  plot(jitter(ntall$ntalkers[ntall$method==thissys],factor=1) ~jitter(ntall$nads [ntall$method=="human_diar"],factor=1),pch=20,xlim=c(0,10),ylim=c(0,10),xlab="Human",ylab=thissys,main="Adult talkers")
+  #print(ntall$ntalkers[ntall$method==thissys])
+  #print(ntall$nads [ntall$method=="human_diar"])
+  print(cor.test(ntall$ntalkers[ntall$method==thissys], ntall$nads [ntall$method=="human_diar"],paired=T,method="spearman"))
+           }
+#dev.off()
+```
+
+## Final conclusions and future steps
+The speech activity detector I used will soon be available, so other people will be able to get it from github and try it. It took me about half an hour to install, and it runs over a 5 minute file in just a few seconds.
+
+I'm currently adding other speech activity detectors (I have tried 1 more that led to terrible results, but I could tweak it; and I've been offered 2 more). My main goal now is to see how easy/hard it would be to tweak segmentors according to different datasets. I'm assuming that end users will not be scared to do some scripting, but won't have tons of speech tech experience, nor infinite patience to install endless packages from binaries.
+
+In the next couple of days, I am not focusing on diarization (attribution of segments to speakers) because most of the local team is, and I hope to simply gain from their experience. I might dedicate Friday to thinking about bridging both types of analyses.
+
+I also don't intend to fix little bugs here and there (missing files) asap, since this I can do later on.
+
+I think it would be extremely beneficial for all of us to consider how we could continue to share these datasets with the people in the workshop and others in the future. For any questions, please contact me!
+
+## zarchive, ignore
+
+```{r old,eval=F}
+read.table("~/Documents/dalohumacosp/derivedFiles/lena-comp.txt",header=T)->x
+ y=x[x$system=="LDC",]
+ names(y)=paste0(names(y),"ldc")
+ z=x[x$system=="lena",]
+ names(z)=paste0(names(z),"lena")
+ merge(y,z,by.x="fileldc",by.y="filelena",all.x=T,all.y=T)->comp
+ summary(comp)
+ 
+```
